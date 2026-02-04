@@ -162,6 +162,12 @@
   50% { background-position: 100% 50%; }
 }
 
+/* Marquee scroll (right to left, seamless loop) */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 /* Light trail effect */
 .light-trail {
   position: relative;
