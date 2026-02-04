@@ -1,57 +1,198 @@
 "use client"
 
 import { motion, useScroll, useTransform } from "framer-motion"
-import { useRef } from "react"
+import { useRef, useState, useEffect, useCallback } from "react"
 import { ChevronDown } from "lucide-react"
-import Image from "next/image"
+import { Canvas, useFrame } from "@react-three/fiber"
+import * as THREE from "three"
 
+/* ─── 3D: Wireframe Globe ──────────────────────────────────────────── */
+function Globe({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const meshRef = useRef<THREE.Mesh>(null!)
+  const outerRef = useRef<THREE.Mesh>(null!)
+
+  useFrame((_, delta) => {
+    const s = scrollProgress.current
+    // Rotate main globe on Y + slight X wobble
+    meshRef.current.rotation.y += delta * 0.25
+    meshRef.current.rotation.x += Math.sin(Date.now() * 0.0008) * 0.003
+    // Counter-rotate the faint outer shell
+    outerRef.current.rotation.y -= delta * 0.1
+    outerRef.current.rotation.z += delta * 0.05
+    // Fade & shrink on scroll
+    const scale = 1 - s * 0.18
+    meshRef.current.scale.setScalar(scale)
+    outerRef.current.scale.setScalar(scale * 1.45);
+    (meshRef.current.material as THREE.MeshBasicMaterial).opacity = 0.38 - s * 0.28;
+    (outerRef.current.material as THREE.MeshBasicMaterial).opacity = 0.1 - s * 0.08
+  })
+
+  return (
+    <>
+      {/* Main wireframe sphere */}
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[2.6, 48, 48]} />
+        <meshBasicMaterial
+          color={0x00c8ff}
+          wireframe
+          transparent
+          opacity={0.38}
+        />
+      </mesh>
+      {/* Outer atmospheric shell */}
+      <mesh ref={outerRef}>
+        <sphereGeometry args={[2.6, 32, 32]} />
+        <meshBasicMaterial
+          color={0x00c8ff}
+          wireframe
+          transparent
+          opacity={0.1}
+        />
+      </mesh>
+    </>
+  )
+}
+
+/* ─── 3D: Orbiting Particle Cloud ─────────────────────────────────── */
+function ParticleField({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const pointsRef = useRef<THREE.Points>(null!)
+  const particleCount = 200
+
+  // Generate positions once on a sphere shell
+  const positions = useRef<Float32Array | null>(null)
+  if (!positions.current) {
+    const arr = new Float32Array(particleCount * 3)
+    for (let i = 0; i < particleCount; i++) {
+      // Distribute evenly on a sphere using fibonacci
+      const goldenRatio = (1 + Math.sqrt(5)) / 2
+      const theta = 2 * Math.PI * (i / goldenRatio)
+      const phi = Math.acos(1 - (2 * (i + 0.5)) / particleCount)
+      const r = 3.8 + Math.random() * 1.0 // shell between 3.8 – 4.8
+      arr[i * 3]     = r * Math.sin(phi) * Math.cos(theta)
+      arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+      arr[i * 3 + 2] = r * Math.cos(phi)
+    }
+    positions.current = arr
+  }
+
+  useFrame((_, delta) => {
+    const s = scrollProgress.current
+    // Orbit on a tilted axis
+    pointsRef.current.rotation.y += delta * 0.12
+    pointsRef.current.rotation.x += delta * 0.04
+    // Fade out on scroll
+    ;(pointsRef.current.material as THREE.PointsMaterial).opacity = 0.7 - s * 0.6
+    pointsRef.current.scale.setScalar(1 - s * 0.15)
+  })
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={particleCount} array={positions.current} itemSize={3} />
+      </bufferGeometry>
+      <pointsMaterial
+        color={0x44dfff}
+        size={0.04}
+        transparent
+        opacity={0.7}
+        depthWrite={false}
+      />
+    </points>
+  )
+}
+
+/* ─── 3D: Ambient glow ring (flat torus behind the globe) ─────────── */
+function GlowRing({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  const torusRef = useRef<THREE.Mesh>(null!)
+
+  useFrame((state, delta) => {
+    const s = scrollProgress.current
+    torusRef.current.rotation.x = Math.PI / 2.4 + Math.sin(state.clock.elapsedTime * 0.5) * 0.08
+    torusRef.current.rotation.z += delta * 0.08;
+    (torusRef.current.material as THREE.MeshBasicMaterial).opacity = 0.18 - s * 0.15
+  })
+
+  return (
+    <mesh ref={torusRef}>
+      <torusGeometry args={[3.6, 0.015, 8, 120]} />
+      <meshBasicMaterial color={0x00c8ff} transparent opacity={0.18} />
+    </mesh>
+  )
+}
+
+/* ─── 3D Scene root ────────────────────────────────────────────────── */
+function Scene({ scrollProgress }: { scrollProgress: React.MutableRefObject<number> }) {
+  return (
+    <>
+      <Globe scrollProgress={scrollProgress} />
+      <ParticleField scrollProgress={scrollProgress} />
+      <GlowRing scrollProgress={scrollProgress} />
+    </>
+  )
+}
+
+/* ─── Main Hero ────────────────────────────────────────────────────── */
 export function HeroSection() {
   const containerRef = useRef<HTMLDivElement>(null)
-  
+  const scrollProgressRef = useRef(0)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end start"]
   })
 
-  const titleY = useTransform(scrollYProgress, [0, 1], [0, 200])
-  const titleOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
-  const imageScale = useTransform(scrollYProgress, [0, 1], [1, 1.15])
-  const imageY = useTransform(scrollYProgress, [0, 1], [0, 100])
-  const overlayOpacity = useTransform(scrollYProgress, [0.3, 0.8], [0, 0.8])
+  // Keep a plain ref in sync so Three.js components can read it without re-renders
+  const syncScrollRef = useCallback((v: number) => { scrollProgressRef.current = v }, [])
+  useEffect(() => {
+    const unsub = scrollYProgress.on("change", syncScrollRef)
+    return unsub
+  }, [scrollYProgress, syncScrollRef])
+
+  const titleY        = useTransform(scrollYProgress, [0, 1],   [0, 200])
+  const titleOpacity  = useTransform(scrollYProgress, [0, 0.5], [1, 0])
+  const overlayOpacity = useTransform(scrollYProgress, [0.3, 0.8], [0, 0.9])
 
   return (
-    <section 
+    <section
       ref={containerRef}
       className="relative h-[200vh]"
     >
-      {/* Sticky container */}
+      {/* ── Sticky viewport ── */}
       <div className="sticky top-0 h-screen overflow-hidden">
-        {/* Hero Image with parallax */}
-        <motion.div 
-          className="absolute inset-0"
-          style={{ scale: imageScale, y: imageY }}
-        >
-          <Image
-            src="/images/smart-city-hero.jpg"
-            alt="Futuristic smart city at night with glowing buildings and light trails"
-            fill
-            className="object-cover"
-            priority
-            quality={90}
-          />
-          {/* Animated scan lines overlay */}
-          <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,200,255,0.02)_50%)] bg-[length:100%_4px] pointer-events-none" />
-        </motion.div>
 
-        {/* Gradient overlays */}
-        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-transparent to-background pointer-events-none" />
-        <motion.div 
+        {/* 3D Canvas – fills entire background */}
+        {mounted && (
+          <Canvas
+            className="absolute inset-0 w-full h-full"
+            camera={{ position: [0, 0.6, 7], fov: 50 }}
+            style={{ background: "transparent" }}
+          >
+            <Scene scrollProgress={scrollProgressRef} />
+          </Canvas>
+        )}
+
+        {/* Radial vignette so edges darken into the page background */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, oklch(0.12 0.02 250) 100%)"
+          }}
+        />
+
+        {/* Scan-line texture overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,200,255,0.02)_50%)] bg-[length:100%_4px] pointer-events-none" />
+
+        {/* Dark overlay that fades in as user scrolls (matches transition to next scene) */}
+        <motion.div
           className="absolute inset-0 bg-background pointer-events-none"
           style={{ opacity: overlayOpacity }}
         />
 
-        {/* Hero content */}
-        <motion.div 
+        {/* ── Text layer ── */}
+        <motion.div
           className="absolute inset-0 flex flex-col items-center justify-center text-center px-6"
           style={{ y: titleY, opacity: titleOpacity }}
         >
@@ -83,7 +224,7 @@ export function HeroSection() {
             Where Smart Cities Meet the Future
           </motion.p>
 
-          {/* Decorative elements */}
+          {/* Exhibition 2026 tag */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -114,7 +255,7 @@ export function HeroSection() {
           </motion.div>
         </motion.div>
 
-        {/* Corner accents */}
+        {/* ── Corner accents ── */}
         <div className="absolute top-8 left-8 w-16 h-16 border-l border-t border-primary/30" />
         <div className="absolute top-8 right-8 w-16 h-16 border-r border-t border-primary/30" />
         <div className="absolute bottom-8 left-8 w-16 h-16 border-l border-b border-primary/30" />
