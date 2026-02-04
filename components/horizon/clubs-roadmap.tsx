@@ -22,8 +22,9 @@ const clubs = [
   },
   {
     id: 2,
-    name: "AI Club",
+    name: "AI & Robot Club",
     icon: Shield,
+    image: "/images/ai-robot-club.png",
     mission: "Protecting the digital infrastructure that powers tomorrow's connected cities.",
     color: "from-blue-500 to-indigo-600"
   },
@@ -45,6 +46,7 @@ const clubs = [
     id: 5,
     name: "Amazon Club",
     icon: Building2,
+    image: "/images/amazon.png",
     mission: "Reimagining physical spaces for the digital age.",
     color: "from-purple-500 to-pink-600"
   },
@@ -52,6 +54,7 @@ const clubs = [
     id: 6,
     name: "Cyber Security Club",
     icon: Leaf,
+    image: "/images/cyber.png",
     mission: "Ensuring our smart cities are also green cities for future generations.",
     color: "from-green-500 to-teal-600"
   },
@@ -112,14 +115,18 @@ function ClubCard({ club, direction }: { club: typeof clubs[0]; direction: numbe
             Chapter {club.id} of 7
           </motion.span>
 
-          {/* Icon */}
+          {/* Icon / Image */}
           <motion.div
-            className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${club.color} p-4 mb-6 pulse-glow`}
+            className={`w-20 h-20 rounded-2xl mb-6 pulse-glow overflow-hidden ${club.image ? "bg-white" : `bg-gradient-to-br ${club.color} p-4`}`}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.25, type: "spring" }}
           >
-            <Icon className="w-full h-full text-white" strokeWidth={1.5} />
+            {club.image ? (
+              <img src={club.image} alt={club.name} className="w-full h-full object-contain" />
+            ) : (
+              <Icon className="w-full h-full text-white" strokeWidth={1.5} />
+            )}
           </motion.div>
 
           {/* Title */}
